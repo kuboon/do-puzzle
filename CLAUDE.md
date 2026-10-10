@@ -1,4 +1,4 @@
-# do-puzzle
+# ドパズル (do-puzzle)
 
 ブラウザで遊べるパズルゲーム集。Remix v3 + Deno
 で書き、**サーバ不要**の静的サイト （SSG → GitHub Pages）として配信する。
@@ -16,6 +16,12 @@
   `Fx.celebrate()`（ヒットストップ → ホワイトアウト → 花火・紙吹雪）。
 - heat は盤面から見て明らかに正しいものだけで計算する（答えを覗かない — heat
   から正誤がバレないように）。
+- **BGM も同じルール**: `web/client/_shared/music.ts`（`jsr:@kuboon/bgm` の上に
+  載せた adaptive BGM）。序盤は calm（のんびり）、盤面が半分解けたら hype
+  に切り替え、1 つ解けるごとにレイヤー（stem）を重ねて和音を豪華にする。
+  `musicLevel()` が進み具合 → レイヤー数を決める。曲は各ゲームの
+  `client/<game>/song.ts` に MML で書く（hype の stem は全部同じ小節数・先頭に
+  `L`）。クリアで fanfare。
 - 新しい演出はゲーム固有にせず、まず `fx.ts`
   に足して全ゲームで使えるようにする。
 - `prefers-reduced-motion` では弱める（消さない）。揺れとフラッシュは止める。
@@ -30,12 +36,12 @@
 ```
 web/
   client/
-    _shared/   layout・routes・games 一覧・トップページ・fx（演出エンジン）・static/
-    queens/    page.tsx（ページ）・game.tsx（island）・logic.ts（ルールと生成器）
+    _shared/   layout・routes・games 一覧・トップページ・fx（演出エンジン）・music（BGM）・static/
+    queens/    page.tsx（ページ）・game.tsx（island）・logic.ts（ルールと生成器）・song.ts（BGM）
   server/
     router.tsx 唯一のエントリ
     _shared/   assets（bundle）・runtime・og 画像・markdown
-    queens/    mod.tsx（ページの action）・rules.md（説明）・logic_test.ts
+    queens/    mod.tsx（ページの action）・rules.md（説明）・logic_test.ts・song_test.ts
   tests/       ブラウザ smoke（lightpanda）
 ```
 
@@ -52,9 +58,10 @@ web/
 2. `web/server/<game>/` に `mod.tsx`（action）・`rules.md`・テスト
 3. `client/_shared/routes.ts` にルート、`client/_shared/games.ts` に一覧の行、
    `server/router.tsx` の controller に action
-4. 演出ルールに従い heat を `fx.setHeat()` に渡す
+4. 演出ルールに従い heat を `fx.setHeat()` に、`musicLevel()` を
+   `Music.setLevel()` に渡す （BGM は `client/<game>/song.ts`）
 
-## QUEENS
+## ドパクイーン
 
 N×N の盤面を N 色の領域に分け、各行・各列・各領域に 1 つずつ、互いに（斜めも）
 接しないように N 個のクイーンを置く。

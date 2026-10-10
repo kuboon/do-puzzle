@@ -21,7 +21,7 @@ import { routes } from "./routes.ts";
 import { color, contentWidth } from "./tokens.ts";
 
 /** The site's name: the header brand, the social cards' eyebrow, the `<title>` suffix. */
-export const SITE_NAME = "DO PUZZLE";
+export const SITE_NAME = "ドパズル";
 
 /** What every page hands the shell. */
 export interface LayoutProps {

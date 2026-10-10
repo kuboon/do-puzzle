@@ -1,5 +1,5 @@
 /**
- * The QUEENS page: the board, then the rules.
+ * The ドパクイーン page: the board, then the rules.
  *
  * The rules are `server/queens/rules.md`, rendered on the server and handed in as nodes — every
  * game keeps its explanation in one Markdown file next to its server half.
@@ -11,7 +11,7 @@ import { SITE_NAME } from "../_shared/layout.tsx";
 import { cardStyle, proseStyle } from "../_shared/theme.ts";
 import { QueensGame } from "./game.tsx";
 
-export const title = `QUEENS — ${SITE_NAME}`;
+export const title = `ドパクイーン — ${SITE_NAME}`;
 export const description =
   "各行・各列・各色の領域に 1 つずつ、互いに隣り合わないように女王を置くパズル。";
 
@@ -26,7 +26,7 @@ export interface QueensPageProps {
 export default function QueensPage(handle: Handle<QueensPageProps>) {
   return () => (
     <>
-      <h1 mix={titleStyle}>♛ QUEENS</h1>
+      <h1 mix={titleStyle}>♛ ドパクイーン</h1>
       <QueensGame stage={1} />
       <article mix={[cardStyle, proseStyle]}>{handle.props.rules}</article>
     </>

@@ -1,5 +1,5 @@
 /**
- * QUEENS, server half: the page, with `rules.md` beside this file rendered into it.
+ * ドパクイーン, server half: the page, with `rules.md` beside this file rendered into it.
  */
 
 import { ogImage } from "../_shared/og/mod.ts";
@@ -11,7 +11,7 @@ import * as Page from "../../client/queens/page.tsx";
 import type { AppContext } from "../router.tsx";
 
 const image = ogImage(routes.queens.href(), {
-  title: "QUEENS",
+  title: "ドパクイーン",
   description: Page.description,
 });
 

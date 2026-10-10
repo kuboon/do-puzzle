@@ -7,7 +7,7 @@ Deno.test("GET / lists the games and ships no script", async () => {
   assertStringIncludes(res.headers.get("content-type") ?? "", "text/html");
   const html = await res.text();
   assertStringIncludes(html, "<!DOCTYPE html>");
-  assertStringIncludes(html, "DO PUZZLE");
+  assertStringIncludes(html, "ドパズル");
   assertStringIncludes(html, 'href="/queens"');
   assert(!html.includes('<script type="module"'));
 });
@@ -24,7 +24,7 @@ Deno.test("GET /queens renders the board, the rules and the runtime", async () =
   // Stage 1 is 5×5: 25 cells rendered on the server.
   assertEquals(html.match(/data-cell="/g)?.length, 25);
   // The rules come from rules.md.
-  assertStringIncludes(html, "QUEENS のルール");
+  assertStringIncludes(html, "ドパクイーンのルール");
 });
 
 Deno.test("GET /og/queens.png is a PNG", async () => {

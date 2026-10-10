@@ -20,7 +20,7 @@ export interface GameEntry {
 export const games: readonly GameEntry[] = [
   {
     id: "queens",
-    name: "QUEENS",
+    name: "ドパクイーン",
     tagline: "各行・各列・各色に 1 つずつ。隣り合わないように女王を置け。",
     icon: "♛",
     href: routes.queens.href(),

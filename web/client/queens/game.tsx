@@ -1,5 +1,5 @@
 /**
- * QUEENS — the playable board, as an island.
+ * ドパクイーン — the playable board, as an island.
  *
  * The server renders stage 1 (or whatever stage it is handed) so the board is there before any
  * script runs; once hydrated, the island switches to the stage in `?stage=` or the one the player
@@ -26,6 +26,7 @@ import {
 } from "@remix-run/component";
 
 import { createFx, type Fx, RAINBOW } from "../_shared/fx.ts";
+import { createMusic, type Music, musicLevel } from "../_shared/music.ts";
 import { color, radius } from "../_shared/tokens.ts";
 import {
   attacked,
@@ -36,6 +37,7 @@ import {
   type Puzzle,
   puzzleForStage,
 } from "./logic.ts";
+import { song } from "./song.ts";
 
 export interface QueensProps {
   stage: number;
@@ -72,6 +74,7 @@ const SHOUTS = [
 const STORE_STAGE = "queens:stage";
 const STORE_BEST = "queens:best";
 const STORE_SOUND = "queens:sound";
+const STORE_BGM = "queens:bgm";
 const STORE_AUTO = "queens:auto-cross";
 
 function load(key: string): string | null {
@@ -105,6 +108,8 @@ export const QueensGame = clientEntry(
     let cleared = false;
     let best = 0;
     let soundOn = true;
+    let bgmOn = true;
+    let music: Music | null = null;
     let autoCross = false;
     let startedAt = 0;
     let finishedIn = 0;
@@ -123,7 +128,19 @@ export const QueensGame = clientEntry(
       startedAt = 0;
       finishedIn = 0;
       combo = 0;
-      fx?.setHeat(0);
+      setHeat(0);
+    }
+
+    /** Feeds the board's heat to the effects and the music. */
+    function setHeat(heat: number): void {
+      fx?.setHeat(heat);
+      music?.setLevel(
+        musicLevel(
+          Math.round(heat * puzzle.size),
+          puzzle.size,
+          song.hype.length,
+        ),
+      );
     }
     reset(stage);
 
@@ -158,7 +175,7 @@ export const QueensGame = clientEntry(
     function react(cell: number, next: Mark): void {
       if (!fx || !board) return;
       const heat = progress(puzzle, marks);
-      fx.setHeat(heat);
+      setHeat(heat);
       const { x, y } = centre(cell);
       const tint = REGION_COLORS[puzzle.regions[cell] % REGION_COLORS.length];
 
@@ -257,6 +274,7 @@ export const QueensGame = clientEntry(
 
     function win(): void {
       cleared = true;
+      music?.fanfare();
       finishedIn = performance.now() - startedAt;
       best = Math.max(best, stage);
       save(STORE_BEST, String(best));
@@ -323,7 +341,7 @@ export const QueensGame = clientEntry(
       const prev = history.pop();
       if (!prev || cleared) return;
       marks = prev;
-      fx?.setHeat(progress(puzzle, marks));
+      setHeat(progress(puzzle, marks));
       fx?.sound("tick");
       void handle.update();
     }
@@ -332,8 +350,15 @@ export const QueensGame = clientEntry(
       if (cleared) return;
       snapshot();
       marks = marks.map(() => "empty");
-      fx?.setHeat(0);
+      setHeat(0);
       if (board) fx?.shake(board, 8);
+      void handle.update();
+    }
+
+    function toggleBgm(): void {
+      bgmOn = !bgmOn;
+      music?.setMuted(!bgmOn);
+      save(STORE_BGM, bgmOn ? "on" : "off");
       void handle.update();
     }
 
@@ -396,6 +421,7 @@ export const QueensGame = clientEntry(
       const params = new URL(location.href).searchParams;
       best = Number(load(STORE_BEST) ?? 0) || 0;
       soundOn = load(STORE_SOUND) !== "off";
+      bgmOn = load(STORE_BGM) !== "off";
       autoCross = load(STORE_AUTO) === "on";
       const wanted = Number(params.get("stage") ?? load(STORE_STAGE) ?? 1);
       const start = Number.isInteger(wanted) && wanted >= 1
@@ -406,6 +432,9 @@ export const QueensGame = clientEntry(
       fx = createFx();
       fx.setMuted(!soundOn);
       handle.signal.addEventListener("abort", () => fx?.destroy());
+      music = createMusic(song);
+      music.setMuted(!bgmOn);
+      handle.signal.addEventListener("abort", () => music?.destroy());
 
       globalThis.addEventListener("pointerup", onUp, { signal: handle.signal });
       globalThis.addEventListener("pointercancel", onUp, {
@@ -428,7 +457,7 @@ export const QueensGame = clientEntry(
       const queens = marks.filter((m) => m === "queen").length;
 
       return (
-        <section mix={wrapStyle} aria-label="QUEENS">
+        <section mix={wrapStyle} aria-label="ドパクイーン">
           <div mix={barStyle}>
             <div mix={stageStyle}>
               <button
@@ -580,6 +609,18 @@ export const QueensGame = clientEntry(
                   ]}
                 >
                   {soundOn ? "🔊" : "🔇"}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={bgmOn ? "true" : "false"}
+                  aria-label="BGM"
+                  mix={[
+                    toolStyle,
+                    bgmOn ? toolOnStyle : null,
+                    on("click", toggleBgm),
+                  ]}
+                >
+                  {bgmOn ? "♪ BGM" : "♪ OFF"}
                 </button>
               </div>
             )}
