@@ -1,16 +1,14 @@
-# deno-remix-tmpl
+# do-puzzle
 
-Remix v3 + Deno のリファレンス実装 (DPoP セッションマネージャー付き)。
+ブラウザで遊べるパズルゲーム集。サーバ不要、演出は全力で派手に。
 
-## デモ
+- 遊ぶ: <https://kuboon.github.io/do-puzzle/>
 
-- GitHub Pages (静的版): <https://kuboon.github.io/deno-remix-tmpl/>
-- Deno Deploy (サーバー版、`/api/*` あり):
-  <https://deno-remix-reference.kuboon-tokyo.deno.net/>
+## ゲーム
 
-このリポジトリは GitHub テンプレート。新しいアプリを作るときの手順は
-[TEMPLATE.md](./TEMPLATE.md)（static / server
-モードの選択、改変、不要機能の削除）、 開発のルールは [CLAUDE.md](./CLAUDE.md)
-を参照。
+| ゲーム                                              | ルール                                                                                              |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| [QUEENS](https://kuboon.github.io/do-puzzle/queens) | [rules.md](./web/server/queens/rules.md) — 各行・各列・各色に 1 つずつ、隣り合わないように ♛ を置く |
 
-ref: https://github.com/remix-run/remix
+開発のルールは [CLAUDE.md](./CLAUDE.md)。Remix v3 + Deno 製
+（[deno-remix-tmpl](https://github.com/kuboon/deno-remix-tmpl) から作成）。
