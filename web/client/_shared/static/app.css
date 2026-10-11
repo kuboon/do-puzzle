@@ -148,7 +148,7 @@
 
 /*
  * Keyframes for the effects. `css(...)` mixins name these in `animation`; a mixin cannot declare
- * keyframes itself, so they live here. `--fx-hue` and `--fx-heat` are set on <html> every frame by
+ * keyframes itself, so they live here. `--fx-hue` is set on <html> about 15 times a second by
  * `client/_shared/fx.ts`.
  */
 

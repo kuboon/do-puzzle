@@ -107,6 +107,18 @@ interface Blob {
 
 const MAX_PARTICLES = 2500;
 
+/** The background canvas's resolution, in canvas pixels per CSS pixel. */
+const BACK_SCALE = 1 / 10;
+
+/** How often the background moves on: every Nth frame. */
+const AMBIENT_EVERY = 2;
+
+/**
+ * How often `--fx-hue` is written: every Nth frame. Each write restyles the whole page and
+ * repaints whatever glows with it, and ~15 updates a second still reads as a smooth colour cycle.
+ */
+const HUE_EVERY = 4;
+
 export const RAINBOW = [
   "#ff3b6b",
   "#ff8a00",
@@ -148,14 +160,22 @@ export function createFx(): Fx {
   let w = 1;
   let h = 1;
   let ratio = 1;
+  /** Whether the particle canvas has anything on it that the next frame must clear. */
+  let frontDirty = false;
+  let frameNo = 0;
+  let shownHue = "";
   const fit = () => {
-    ratio = Math.min(globalThis.devicePixelRatio || 1, 2);
+    // Particles want crisp edges, but past 1.5× the extra pixels cost far more than they show.
+    ratio = Math.min(globalThis.devicePixelRatio || 1, 1.5);
     w = globalThis.innerWidth;
     h = globalThis.innerHeight;
-    for (const c of [back, front]) {
-      c.width = Math.round(w * ratio);
-      c.height = Math.round(h * ratio);
-    }
+    front.width = Math.round(w * ratio);
+    front.height = Math.round(h * ratio);
+    // The background is nothing but soft blobs, so it is drawn at a tiny resolution and stretched
+    // — it looks the same, and fills ~1/100th of the pixels a full-resolution canvas would.
+    back.width = Math.max(1, Math.round(w * BACK_SCALE));
+    back.height = Math.max(1, Math.round(h * BACK_SCALE));
+    frontDirty = true;
   };
   fit();
   globalThis.addEventListener("resize", fit);
@@ -470,19 +490,26 @@ export function createFx(): Fx {
     shownHeat += (heat - shownHeat) * 0.06 * dt;
     // The hue rotates faster as heat rises — lazy drift at 0, a strobe-y spin at 1.
     hue = (hue + (0.15 + shownHeat * shownHeat * 6) * dt) % 360;
-    document.documentElement.style.setProperty("--fx-hue", hue.toFixed(1));
-    document.documentElement.style.setProperty(
-      "--fx-heat",
-      shownHeat.toFixed(3),
-    );
+    frameNo++;
 
-    if (bctx) drawBack(bctx, dt, now);
+    // The ambient layer only moves slowly, so it runs at a fraction of the frame rate.
+    if (frameNo % HUE_EVERY === 0) {
+      const nextHue = String(Math.round(hue));
+      if (nextHue !== shownHue) {
+        shownHue = nextHue;
+        document.documentElement.style.setProperty("--fx-hue", nextHue);
+      }
+    }
+    if (frameNo % AMBIENT_EVERY === 0 && bctx) {
+      drawBack(bctx, dt * AMBIENT_EVERY, now);
+    }
+    spawnEmbers(dt);
     if (fctx) drawFront(fctx, dt, now);
     frame = requestAnimationFrame(tick);
   }
 
   function drawBack(ctx: CanvasRenderingContext2D, dt: number, now: number) {
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.setTransform(BACK_SCALE, 0, 0, BACK_SCALE, 0, 0);
     const d = dark();
     ctx.globalCompositeOperation = "source-over";
     ctx.fillStyle = d ? "#07070f" : "#fbf8ff";
@@ -515,6 +542,10 @@ export function createFx(): Fx {
       ctx.fillRect(0, 0, w, h);
     }
     ctx.globalCompositeOperation = "source-over";
+  }
+
+  function spawnEmbers(dt: number) {
+    const d = dark();
     // Embers: a trickle at rest, a geyser near the end.
     const rate = (0.15 + shownHeat * shownHeat * 6) * amount * dt;
     const embers = Math.min(
@@ -543,8 +574,15 @@ export function createFx(): Fx {
   }
 
   function drawFront(ctx: CanvasRenderingContext2D, dt: number, now: number) {
+    const busy = particles.length > 0 || rings.length > 0 ||
+      now < fireworksUntil;
+    // Nothing on screen and nothing coming: leave the canvas alone instead of clearing an empty
+    // screen sixty times a second.
+    if (!busy && !frontDirty) return;
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, w, h);
+    frontDirty = busy;
+    if (!busy) return;
 
     if (now < fireworksUntil && now >= nextFirework) {
       nextFirework = now + (reduced ? 600 : 160 + Math.random() * 220);
