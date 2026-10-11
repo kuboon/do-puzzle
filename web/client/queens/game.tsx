@@ -788,8 +788,8 @@ export const QueensGame = clientEntry(
               </div>
             )}
           <p mix={hintStyle}>
-            タップで ✕、ダブルタップか長押しで ♛（外すと ❤ が減る）。ドラッグで
-            ✕ をまとめて付け外し
+            タップ、ドラッグで ✕ のつけ外し。ダブルタップか長押しで
+            ♛。ハズレだと ❤ が減る。
           </p>
         </section>
       );
