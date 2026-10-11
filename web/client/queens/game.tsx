@@ -646,20 +646,16 @@ export const QueensGame = clientEntry(
                   mix={[cellStyle, pressing === i ? pressStyle : null]}
                   style={{
                     background: REGION_COLORS[region % REGION_COLORS.length],
-                    borderTopWidth: edge(r > 0 ? regions[i - size] : undefined),
-                    borderBottomWidth: edge(
-                      r < size - 1 ? regions[i + size] : undefined,
-                    ),
-                    borderLeftWidth: edge(c > 0 ? regions[i - 1] : undefined),
-                    borderRightWidth: edge(
-                      c < size - 1 ? regions[i + 1] : undefined,
-                    ),
+                    "--bt": edge(r > 0 ? regions[i - size] : undefined),
+                    "--bb": edge(r < size - 1 ? regions[i + size] : undefined),
+                    "--bl": edge(c > 0 ? regions[i - 1] : undefined),
+                    "--br": edge(c < size - 1 ? regions[i + 1] : undefined),
                   }}
                 >
                   {mark === "queen"
-                    ? <span key="q" mix={queenStyle}>♛</span>
+                    ? queenMark()
                     : mark === "cross"
-                    ? <span key="x" mix={crossStyle}>✕</span>
+                    ? crossMark()
                     : null}
                 </button>
               );
@@ -855,7 +851,18 @@ const cellStyle = css({
   placeItems: "center",
   padding: 0,
   margin: 0,
-  border: "0 solid #1a1a2e",
+  border: "none",
+  // Region lines go on an overlay rather than the cell's own border: uneven borders would push
+  // the cell's content box, and the mark with it, off-centre.
+  "&::after": {
+    content: '""',
+    position: "absolute",
+    inset: 0,
+    borderStyle: "solid",
+    borderColor: "#1a1a2e",
+    borderWidth: "var(--bt) var(--br) var(--bb) var(--bl)",
+    pointerEvents: "none",
+  },
   font: "inherit",
   color: "#1a1a2e",
   cursor: "pointer",
@@ -907,19 +914,63 @@ const overTitleStyle = css({
   letterSpacing: "0.06em",
 });
 
+/**
+ * The marks are drawn, not typed. A ♛ glyph sits wherever its font puts it — off to one side and
+ * below the middle, by a different amount in every font — so each mark is an SVG drawn centred in
+ * its own square, and the square fills most of the cell.
+ */
+function queenMark() {
+  return (
+    <svg key="q" viewBox="0 0 100 100" aria-hidden="true" mix={queenStyle}>
+      <path
+        d="M14 34 L26 60 L32 26 L42 58 L50 18 L58 58 L68 26 L74 60 L86 34 L78 76 L22 76 Z"
+        fill="#1a1a2e"
+        stroke="#1a1a2e"
+        stroke-width="3"
+        stroke-linejoin="round"
+      />
+      <circle cx="14" cy="32" r="6" fill="#1a1a2e" />
+      <circle cx="32" cy="24" r="6" fill="#1a1a2e" />
+      <circle cx="50" cy="15" r="6.5" fill="#1a1a2e" />
+      <circle cx="68" cy="24" r="6" fill="#1a1a2e" />
+      <circle cx="86" cy="32" r="6" fill="#1a1a2e" />
+      <rect x="21" y="80" width="58" height="10" rx="3" fill="#1a1a2e" />
+      <path
+        d="M28 66 H72"
+        stroke="#ffffff"
+        stroke-width="3"
+        stroke-linecap="round"
+        opacity="0.75"
+      />
+    </svg>
+  );
+}
+
+function crossMark() {
+  return (
+    <svg key="x" viewBox="0 0 100 100" aria-hidden="true" mix={crossStyle}>
+      <path
+        d="M24 24 L76 76 M76 24 L24 76"
+        stroke="#1a1a2e"
+        stroke-width="13"
+        stroke-linecap="round"
+      />
+    </svg>
+  );
+}
+
 const queenStyle = css({
-  display: "inline-block",
-  fontSize: "calc(100cqi / var(--n) * 0.8)",
-  lineHeight: 1,
-  textShadow: "0 0 8px #fff, 0 2px 0 #fff8",
+  display: "block",
+  width: "82%",
+  height: "82%",
+  filter: "drop-shadow(0 0 3px #fff) drop-shadow(0 1px 0 #fff)",
   animation: "fx-pop 420ms cubic-bezier(.2,.8,.3,1.4)",
 });
 
 const crossStyle = css({
-  display: "inline-block",
-  fontSize: "calc(100cqi / var(--n) * 0.62)",
-  fontWeight: 900,
-  lineHeight: 1,
+  display: "block",
+  width: "62%",
+  height: "62%",
   opacity: 0.6,
   animation: "fx-pop 200ms ease-out",
 });
