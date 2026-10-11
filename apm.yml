@@ -1,6 +1,6 @@
-name: deno-remix-reference
+name: do-puzzle
 version: 1.0.0
-description: APM project for deno-remix-reference
+description: APM project for do-puzzle
 author: Ohkubo KOHEI
 dependencies:
   apm:

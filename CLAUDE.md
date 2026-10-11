@@ -1,159 +1,105 @@
-# deno-remix-tmpl
+# ドパズル (do-puzzle)
 
-Remix v3 + Deno のテンプレート。DPoP (RFC 9449) セッションマネージャーと
-id.kbn.one 連携の push 通知を含む。
+ブラウザで遊べるパズルゲーム集。Remix v3 + Deno
+で書き、**サーバ不要**の静的サイト （SSG → GitHub Pages）として配信する。
 
-## このリポジトリは何か（最初に判定する）
+## 演出ルール（リポジトリ全体）
 
-このリポジトリは **GitHub
-テンプレート**で、ここから新しいアプリを作る。ファイルは全部コピーされるので、
-同じ `CLAUDE.md` が **テンプレ本体**と**派生アプリ**の両方にある。次で区別する。
+**演出はめちゃくちゃ派手にする。そしてステージクリアが近づくほど派手さを増す。**
+すべてのゲームがこのルールに従う。
 
-1. `git remote get-url origin` が `kuboon/deno-remix-tmpl` →
-   **テンプレ本体**。「テンプレ本体を保守するとき」を読む。
-2. それ以外 → **派生アプリ**。`TEMPLATE.md` が残っていれば、init 前なので **まず
-   `TEMPLATE.md` の ステップ 0 とステージ 1 を済ませる**。`TEMPLATE.md`
-   が無ければ init 済みで、普通のアプリとして扱う
-   （テンプレ本体の事情は持ち込まない）。
-
-判定できない（remote が無い等）ときは、推測せずユーザーに聞く。
-
-## テンプレ本体を保守するとき
-
-（派生アプリでは、init の最後にこの節を削除する。）
-
-- 方針: **機能は全部このテンプレに置く**。別の starter に機能を分散させない（旧
-  SSG starter
-  の機能もここに統合済み）。派生アプリが要らない機能を消せるよう、`TEMPLATE.md`
-  の機能表と `[feature:名前]` タグを **機能を足す/消す/動かすたびに更新する**。
-- 機能を足したら: 配線行（`routes.ts` / `router.tsx` / `layout.tsx` /
-  `assets.ts`）に `[feature:名前]` を付け、 `TEMPLATE.md`
-  の表に行（消すファイル・配線・依存）を足す。
-- 二つのモードが両方動くことを保つ: static（SSG → Pages）と server（Deno
-  Deploy）。 デモは両方の URL を `README.md`
-  とトップページに載せている。`/api/*` を static に出さない
-  （どこからもリンクしない、`entryPoints` に入れない）。
-- 変更前後に `deno task check && deno task test && deno task build` と
-  `deno task test:browser` を通す。 `TEMPLATE.md`
-  の削除リストが本当に通るか、確かめるには scratch の `git worktree` で static
-  用と server 用の リストをそれぞれ実際に消して `check`/`build`(`test`) を回す。
-- `@remix-run/render-middleware` / `@remix-run/spa` は 1.0.0 で固定を外した
-  （`TEMPLATE.md` 参照）。依存を上げたら `/blog` の本文を確認する。
+- 盤面の「クリアへの近さ」を `0 … 1` の **heat** として計算し、
+  `web/client/_shared/fx.ts` の `Fx.setHeat()` に渡す。背景（色の塊・回転する
+  色相・湧き上がる火の粉）は heat に応じて勝手に派手になる。
+- 1 手ごとの演出（パーティクル・衝撃波リング・画面揺れ・フラッシュ・ポップアップ
+  文字・効果音）も heat を掛けて強くする。残り 1 手は最大級、クリアは
+  `Fx.celebrate()`（ヒットストップ → ホワイトアウト → 花火・紙吹雪）。
+- heat は盤面から見て明らかに正しいものだけで計算する（答えを覗かない — heat
+  から正誤がバレないように）。
+- **BGM も同じルール**: `web/client/_shared/music.ts`（`jsr:@kuboon/bgm` の上に
+  載せた adaptive BGM）。序盤は calm（のんびり）、盤面が半分解けたら hype
+  に切り替え、1 つ解けるごとにレイヤー（stem）を重ねて和音を豪華にする。
+  `musicLevel()` が進み具合 → レイヤー数を決める。曲は各ゲームの
+  `client/<game>/song.ts` に MML で書く（hype の stem は全部同じ小節数・先頭に
+  `L`）。クリアで fanfare。
+- 新しい演出はゲーム固有にせず、まず `fx.ts`
+  に足して全ゲームで使えるようにする。
+- `prefers-reduced-motion` では弱める（消さない）。揺れとフラッシュは止める。
 
 ## 構造
 
-- `KvRepo` 抽象は [jsr:@kuboon/kv](https://jsr.io/@kuboon/kv) を利用 (memory /
-  Deno KV / Turso libSQL)。
-- `packages/session-storage-kv/` — `@remix-run/session` の `SessionStorage` を
-  `KvRepo` で実装。
-- `packages/remix-dpop-session-middleware/` — DPoP セッション middleware (Remix
-  v3 fetch-router 用)。`context.get(DpopSession)` でアクセスでき、
-  `@remix-run/session` の `Session` と共存可能。DPoP proof 生成・検証は
-  [jsr:@kuboon/dpop](https://jsr.io/@kuboon/dpop) を利用。
-- `web/` — Remix v3 リファレンス Web アプリ (Deno Deploy へ server
-  として、GitHub Pages
-  へ静的サイトとして同時にデプロイ。派生アプリはどちらか一方を選ぶ —
-  `TEMPLATE.md`)
-  - `web/client/` — ブラウザに渡るもの全て (routes / pages / islands / layout /
-    static)。`deno.ns` 無しで型チェックされる
-  - `web/server/` — router・asset bundler・API・config・og 画像
-  - `/my` — id.kbn.one を IdP として使うサインインフロー +
-    プッシュ通知のサンプル
+`web/client/`（ブラウザに渡るもの）と `web/server/`（ビルド時に HTML
+を作るもの）
+に分け、**それぞれの直下はゲームごとのディレクトリ**にする。共有物は
+`_shared/`。
 
-## プッシュ通知 (id.kbn.one 連携)
+```
+web/
+  client/
+    _shared/   layout・routes・games 一覧・トップページ・fx（演出エンジン）・music（BGM）・static/
+    queens/    page.tsx（ページ）・game.tsx（island）・logic.ts（ルールと生成器）・song.ts（BGM）
+  server/
+    router.tsx 唯一のエントリ
+    _shared/   assets（bundle）・runtime・og 画像・markdown
+    queens/    mod.tsx（ページの action）・rules.md（説明）・logic_test.ts・song_test.ts
+  tests/       ブラウザ smoke（lightpanda）
+```
 
-id.kbn.one を Web Push のバックエンドとして使う最小構成。購読情報は IdP
-が保持し、RP (このアプリ) は購読 UI と送信トリガーだけを持つ。
+- **どのゲームも説明の Markdown を 1 つ持つ**: `web/server/<game>/rules.md`。
+  ページに `@kuboon/md` でレンダリングして載せる。
+- ゲームの island は `web/client/<game>/game.tsx`（`assets.ts` が `*/game.tsx`
+  を glob する）。ブラウザ側のコードは `Deno.` を参照しない。
+- `client/` の型チェックは `deno.ns` 無しなので、テストは `server/<game>/`
+  に置き `client/<game>/logic.ts` を import する。
 
-- ブラウザ側 (`web/client/lib/push/`, `web/client/islands/push_card.tsx`,
-  `web/client/sw.js`):
-  - `${base}/sw.js` をこのオリジンに登録し push を受信 (`router.tsx`
-    の専用ルートが配信。scope を `${base}/` にするため `static/`
-    配下には置かない)。
-  - 購読の取得/登録/改名/削除/テストは DPoP-bound fetch で IdP の
-    `${IDP_ORIGIN}/push/*` を直接叩く (cross-origin)。VAPID 公開鍵も IdP
-    のもの。
-- サーバ側 (`web/server/lib/push/client.ts`, `lib/signing-key.ts`):
-  - `POST /api/notify` がサーバ起点で通知を送る。RP は ES256 鍵で
-    `private_key_jwt` クライアントアサーション ([RFC 7521]/[RFC 7523]) を作り、
-    IdP の `POST /rp/notifications` へ送信する。
-  - `GET /.well-known/jwks.json` で RP の公開鍵を配布し、IdP
-    がアサーションを検証 する (共通鍵不要。IdP は RP の JWKS を取得するだけ)。
-  - RP の `clientId` はこのアプリの origin (`RP_ORIGIN`) で、IdP の
-    `AUTHORIZE_WHITELIST` に含まれている必要がある。
+### ゲームを足すとき
 
-[RFC 7521]: https://www.rfc-editor.org/rfc/rfc7521
-[RFC 7523]: https://www.rfc-editor.org/rfc/rfc7523
+1. `web/client/<game>/` に `page.tsx`・`game.tsx`・`logic.ts`
+2. `web/server/<game>/` に `mod.tsx`（action）・`rules.md`・テスト
+3. `client/_shared/routes.ts` にルート、`client/_shared/games.ts` に一覧の行、
+   `server/router.tsx` の controller に action
+4. 演出ルールに従い heat を `fx.setHeat()` に、`musicLevel()` を
+   `Music.setLevel()` に渡す （BGM は `client/<game>/song.ts`）
 
-## 環境変数
+## ドパクイーン
 
-env アクセスは `web/server/config.ts` に集約し、ホスト非依存にしてある。
-`loadConfig(env)` が env レコードから型付き `Config` を作り、`getConfig()` が
-ホストに応じて env を自前で取得する (配線不要): Deno は `Deno.env`、Cloudflare
-Workers は `cloudflare:workers` の `env`。後者は動的 `import()` なので、その
-モジュールを持たない Deno はロードで落ちずフォールバックできる (静的 import は
-Deno で catch 不能なエラーになる)。env は top-level await
-で起動時に一度だけ解決・ 保持するので `getConfig()` は sync。
+N×N の盤面を N 色の領域に分け、各行・各列・各領域に 1 つずつ、互いに（斜めも）
+接しないように N 個のクイーンを置く。
 
-- `IDP_ORIGIN` — 外部 IdP の origin (例: `http://localhost:8000`)。 `/my`
-  ページが `${IDP_ORIGIN}/authorize` へ DPoP thumbprint と redirect_uri
-  を付けて遷移し、戻った後 `${IDP_ORIGIN}/session` で userId を取得する。
-- `RP_ORIGIN` — このアプリの公開 origin。`POST /api/notify` のクライアント
-  アサーションの `clientId`/`iss`/`sub` に使う。IdP の `AUTHORIZE_WHITELIST`
-  に登録が必要。未設定だと送信時にエラーになる。
-- `RP_SIGNING_KEY_JWK` — 任意。ES256 秘密鍵 (JWK JSON)。未設定ならプロセス毎に
-  生成
-  (開発用)。本番では固定鍵を設定し、再起動で鍵がローテートしないようにする。
-- `BASE_URL` — 静的ビルド専用。Pages のサブパス（PR プレビュー等）を `base`
-  にする。server（`deno serve` / Deno Deploy）は常にルート配信なので読まない
-  （`web/server/deno.json` の `dev` 権限で ignore）。
-- `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` — `GET /api/turso` サンプル用の
-  Turso (libSQL) 接続。未設定なら 503 を返すのみ。
+- 盤面はステージ番号を seed に `logic.ts` の `generate()` が決定的に生成する
+  （同じステージは誰でも同じ問題）。解は必ず 1 通り（`solve()` で検証し、別解の
+  クイーンのマスを隣の領域へ移して潰す）。
+- サイズはステージ 1–2 が 5×5、以降 6・7・8・9、25 以降 10×10。
+- 進捗（クリア済みステージ、現在のステージ、音・自動 × の設定）は
+  `localStorage`。`?stage=N` でも開ける（クリア済み + 1 まで）。
 
-## Turso (libSQL) + data-table サンプル
+## デプロイ
 
-`GET /api/turso` が `@remix-run/data-table` のリレーショナル API で Turso に
-アクセスし、`visits` を記録して累計を返す。Turso の `@libsql/client` は非同期
-なので、公式の同期 SQLite 実装ではなく非同期の
-[`@remix-kbn/data-table-sqlite-turso`](https://jsr.io/@remix-kbn/data-table-sqlite-turso)
-(`createTursoDatabase(client)`) を使う。クライアントは edge 対応の
-`@libsql/client/web`。詳細は `web/server/lib/turso/README.md`。
-
-## デプロイ (Deno Deploy + GitHub Pages)
-
-`web/server/router.tsx` が唯一のエントリ。default export は素の
-`@remix-run/fetch-router` の router で、2 通りに使う。
-
-- **Deno Deploy**: エントリポイント `web/server/router.tsx`
-  (`deno serve`)。ページと server 専用ルート (`/api/*`,
-  `/.well-known/jwks.json`) の両方がライブで応答する。
-- **GitHub Pages**: `.github/workflows/pages.yml` が `deno task build`
-  (`@remix-kbn/ssg`) を走らせ、同じ router を `fetch()` でクロールして
-  `web/dist` に静的 HTML を書き出す。クロールは `entryPoints` (`/`、og
-  画像、`/sw.js`) とそこからの リンクだけを辿る。どこからもリンクしていない
-  `/api/*` は静的化されない。 main は Pages ルート、PR は preview
-  サブパスにデプロイされる (`BASE_URL` から `base` が決まる)。
-
-静的版では API が無いので、`/my` の「サーバーから送信」(`POST /api/notify`) は
-動かない。それ以外 (DPoP + IdP は全てブラウザ → id.kbn.one の直接通信)
-は静的版でも動く。
+`.github/workflows/pages.yml` が `deno task build`（`@remix-kbn/ssg`）で
+`web/server/router.tsx` を `fetch()` でクロールし、`web/dist` に静的 HTML
+を書き出して GitHub Pages へ。main は Pages ルート、PR は preview サブパス
+（`BASE_URL` から `base` が決まる）。`/api/*` のようなサーバ機能は持たない。
 
 ## 開発
 
 ```bash
-deno task dev      # web アプリの開発サーバー起動
-deno task build    # GitHub Pages 用の静的サイトを web/dist へ生成
-deno task test     # パッケージ/サーバーのテスト実行
+deno task dev           # 開発サーバー (http://localhost:8000)
+deno task build         # 静的サイトを web/dist へ生成
+deno task test          # ロジック・ルーターのテスト
 deno task test:browser  # ブラウザ smoke テスト (lightpanda)
-deno task check    # 型チェック + lint + fmt
+deno task check         # 型チェック + lint + fmt
 ```
+
+変更前後に `deno task check && deno task test && deno task build` と
+`deno task test:browser` を通す。
 
 ## コーディング規約
 
 - Deno ファースト（Web API 優先、Node.js API は必要最小限）
 - TypeScript strict mode
 - テストは `Deno.test()` + `@std/assert`
-- ファイル名はスネークケース（例: `dpop_test.ts`）
-- ページ/island の見た目は `@remix-run/component` の `css()` mixin と
-  `web/client/tokens.ts` のトークンで書く (Tailwind / daisyUI は使わない)
-- ブラウザへ渡るコードは `web/client/` に置き、`Deno.` を参照しない
+- ファイル名はスネークケース（例: `logic_test.ts`）
+- 見た目は `@remix-run/component` の `css()` mixin と
+  `web/client/_shared/tokens.ts` のトークンで書く（Tailwind 等は使わない）。
+  keyframes は `css()` で宣言できないので `client/_shared/static/app.css` に置く
+- 追加した `import` は ルートの `deno.json` にだけ書く
