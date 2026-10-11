@@ -60,7 +60,10 @@ web/
 2. `web/server/<game>/` に `mod.tsx`（action）・`rules.md`・テスト
 3. `client/_shared/routes.ts` にルート、`client/_shared/games.ts` に一覧の行、
    `server/router.tsx` の controller に action
-4. 演出ルールに従い heat を `fx.setHeat()` に、`musicLevel()` を
+4. プレイ画面はズーム禁止: ページで `viewport = NO_ZOOM_VIEWPORT`、island で
+   `lockZoom(handle.signal)`（`client/_shared/no_zoom.ts`。ダブルタップ・ピンチの
+   ズームを止める）
+5. 演出ルールに従い heat を `fx.setHeat()` に、`musicLevel()` を
    `Music.setLevel()` に渡す （BGM は `client/<game>/song.ts`）
 
 ## ドパクイーン

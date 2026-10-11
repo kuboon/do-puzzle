@@ -8,6 +8,7 @@
 import { css, type Handle, type RemixNode } from "@remix-run/component";
 
 import { SITE_NAME } from "../_shared/layout.tsx";
+import { NO_ZOOM_VIEWPORT } from "../_shared/no_zoom.ts";
 import { cardStyle, proseStyle } from "../_shared/theme.ts";
 import { QueensGame } from "./game.tsx";
 
@@ -17,6 +18,9 @@ export const description =
 
 /** The board is an island. */
 export const hydrate = true;
+
+/** A play screen: no zoom. See `_shared/no_zoom.ts`. */
+export const viewport = NO_ZOOM_VIEWPORT;
 
 export interface QueensPageProps {
   /** The rules, rendered from Markdown by the server. */

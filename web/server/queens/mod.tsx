@@ -24,6 +24,7 @@ export async function queensAction(context: AppContext): Promise<Response> {
       title={Page.title}
       description={Page.description}
       image={image}
+      viewport={Page.viewport}
       script={Page.hydrate ? clientRuntime : null}
     >
       <Page.default rules={rules} />

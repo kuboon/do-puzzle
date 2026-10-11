@@ -28,6 +28,7 @@ import {
 } from "@remix-run/component";
 
 import { createFx, type Fx, RAINBOW } from "../_shared/fx.ts";
+import { lockZoom } from "../_shared/no_zoom.ts";
 import { createMusic, type Music, musicLevel } from "../_shared/music.ts";
 import { color, radius } from "../_shared/tokens.ts";
 import {
@@ -562,6 +563,7 @@ export const QueensGame = clientEntry(
         : 1;
       if (start !== stage) reset(start);
 
+      lockZoom(handle.signal);
       fx = createFx();
       fx.setMuted(!soundOn);
       handle.signal.addEventListener("abort", () => fx?.destroy());

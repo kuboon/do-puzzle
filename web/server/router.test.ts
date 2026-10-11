@@ -25,6 +25,8 @@ Deno.test("GET /queens renders the board, the rules and the runtime", async () =
   assertEquals(html.match(/data-cell="/g)?.length, 25);
   // The rules come from rules.md.
   assertStringIncludes(html, "クイーンのルール");
+  // A play screen: zoom off (see client/_shared/no_zoom.ts).
+  assertStringIncludes(html, "user-scalable=no");
 });
 
 Deno.test("GET /og/queens.png is a PNG", async () => {
