@@ -240,3 +240,13 @@
     animation-iteration-count: 1 !important;
   }
 }
+
+/* A long-press charging up: a light ring closing in from the cell's edge. */
+@keyframes fx-charge {
+  from {
+    box-shadow: inset 0 0 0 0 #ffffffcc;
+  }
+  to {
+    box-shadow: inset 0 0 0 999px #ffffff66;
+  }
+}

@@ -35,6 +35,8 @@ export interface Music {
   setLevel(level: number): void;
   /** The fanfare; the BGM dips under it. */
   fanfare(): void;
+  /** Silence, for a game over. The next {@link setLevel} starts the music again. */
+  stop(): void;
   setMuted(muted: boolean): void;
   destroy(): void;
 }
@@ -70,7 +72,13 @@ export function createMusic(song: Song): Music {
     audio = new GameAudio();
   } catch {
     // No Web Audio here: a silent game is still a game.
-    return { setLevel() {}, fanfare() {}, setMuted() {}, destroy() {} };
+    return {
+      setLevel() {},
+      fanfare() {},
+      stop() {},
+      setMuted() {},
+      destroy() {},
+    };
   }
   audio.setVolume("bgm", 0.55);
   const ctx = audio.context;
@@ -170,6 +178,13 @@ export function createMusic(song: Song): Music {
       setTimeout(() => {
         if (!destroyed) audio.setVolume("bgm", 0.55, { fade: 2 });
       }, 2500);
+    },
+    stop() {
+      if (destroyed) return;
+      stopHype(0.4);
+      audio.stopBgm({ fade: 0.4 });
+      // Neither calm nor any hype level, so whatever comes next counts as a change.
+      level = -1;
     },
     setMuted(muted) {
       if (!destroyed) audio.setVolume("master", muted ? 0 : 1, { fade: 0.3 });

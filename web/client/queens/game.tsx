@@ -5,13 +5,15 @@
  * script runs; once hydrated, the island switches to the stage in `?stage=` or the one the player
  * was last on, kept in `localStorage`.
  *
- * Input, as in the well-known version of this puzzle:
+ * Input:
  *
- * - **Tap** a cell to cycle it: empty → × → ♛ → empty.
- * - **Drag** from an empty cell to paint × across every empty cell the pointer passes.
+ * - **Tap** toggles × (a note to self: "no queen here").
+ * - **Double-tap** or **long-press** places ♛. A queen is judged on the spot: the right cell keeps
+ *   it; the wrong one costs a ❤ and turns into ×. A miss with no ❤ left is game over.
+ * - **Drag** from an empty cell paints ×; from a × cell, erases them.
  *
  * Everything the player does goes through {@link react}, which works out the board's heat — how
- * many rule-abiding queens are down — and fires effects scaled by it. The last queen before the
+ * many queens are down — and fires effects scaled by it. The last queen before the
  * clear is the loudest move in the game; the clear itself is louder still. See
  * `client/_shared/fx.ts` and the house rule in `CLAUDE.md`.
  */
@@ -30,9 +32,10 @@ import { createMusic, type Music, musicLevel } from "../_shared/music.ts";
 import { color, radius } from "../_shared/tokens.ts";
 import {
   attacked,
-  conflicts,
   isSolved,
+  judgeQueen,
   type Mark,
+  MAX_LIVES,
   progress,
   type Puzzle,
   puzzleForStage,
@@ -71,6 +74,11 @@ const SHOUTS = [
   "GODLIKE!",
 ];
 
+/** A second tap on the same cell within this long is a double-tap. */
+const DOUBLE_TAP_MS = 320;
+/** Holding a cell this long places a queen. */
+const LONG_PRESS_MS = 420;
+
 const STORE_STAGE = "queens:stage";
 const STORE_BEST = "queens:best";
 const STORE_SOUND = "queens:sound";
@@ -106,6 +114,8 @@ export const QueensGame = clientEntry(
     let marks: Mark[] = [];
     let history: Mark[][] = [];
     let cleared = false;
+    let over = false;
+    let lives = MAX_LIVES;
     let best = 0;
     let soundOn = true;
     let bgmOn = true;
@@ -125,6 +135,8 @@ export const QueensGame = clientEntry(
       marks = new Array<Mark>(puzzle.size * puzzle.size).fill("empty");
       history = [];
       cleared = false;
+      over = false;
+      lives = MAX_LIVES;
       startedAt = 0;
       finishedIn = 0;
       combo = 0;
@@ -192,25 +204,6 @@ export const QueensGame = clientEntry(
       }
       if (next === "empty") {
         fx.burst(x, y, { count: 10, colors: ["#999999"], speed: 3, life: 20 });
-        return;
-      }
-
-      const bad = conflicts(puzzle, marks);
-      if (bad.has(cell)) {
-        combo = 0;
-        fx.sound("error");
-        fx.shake(board, 16, 400);
-        fx.flash("#ff0033", 0.3, 300);
-        for (const c of bad) {
-          const p = centre(c);
-          fx.burst(p.x, p.y, {
-            count: 30,
-            colors: ["#ff0033", "#ff8a00", "#330000"],
-            speed: 7,
-            life: 35,
-          });
-        }
-        fx.popText(x, y - 20, "✖ NG", { color: "#ff3355", size: 40 });
         return;
       }
 
@@ -317,41 +310,104 @@ export const QueensGame = clientEntry(
       void handle.update();
     }
 
+    /** A wrong queen: a heart breaks, and the cell becomes ×. */
+    function miss(cell: number): void {
+      combo = 0;
+      marks[cell] = "cross";
+      if (!fx || !board) return;
+      const { x, y } = centre(cell);
+      fx.sound("error");
+      fx.shake(board, 18, 450);
+      fx.flash("#ff0033", 0.35, 350);
+      fx.burst(x, y, {
+        count: 60,
+        colors: ["#ff0033", "#ff5a7a", "#330000"],
+        speed: 9,
+        life: 45,
+      });
+      fx.ring(x, y, "#ff0033", 160);
+      fx.popText(x, y - 24, lives === 0 ? "💔 LAST CHANCE!" : "💔 MISS", {
+        color: "#ff3355",
+        size: lives === 0 ? 34 : 40,
+        ms: 1100,
+      });
+    }
+
+    function gameOver(): void {
+      over = true;
+      finishedIn = performance.now() - startedAt;
+      combo = 0;
+      music?.stop();
+      fx?.setHeat(0);
+      if (fx && board) void fx.defeat(board);
+    }
+
+    /** Double-tap or long-press: put a queen down, and find out at once. */
+    function placeQueen(cell: number): void {
+      if (cleared || over || marks[cell] === "queen") return;
+      if (startedAt === 0) startedAt = performance.now();
+      snapshot();
+      const verdict = judgeQueen(puzzle, cell, lives);
+      if (verdict.kind === "queen") {
+        apply(cell, "queen");
+        return;
+      }
+      if (verdict.kind === "miss") {
+        lives = verdict.lives;
+        miss(cell);
+      } else gameOver();
+      void handle.update();
+    }
+
     /** One user change to one cell. */
     function apply(cell: number, next: Mark): void {
-      if (cleared || marks[cell] === next) return;
+      if (cleared || over || marks[cell] === next) return;
       if (startedAt === 0) startedAt = performance.now();
       marks[cell] = next;
       react(cell, next);
       void handle.update();
     }
 
-    function cycle(cell: number): void {
+    let lastTap = { cell: -1, at: 0, toggled: false };
+
+    /** A tap toggles ×; a second tap on the same cell straight after is a double-tap. */
+    function tap(cell: number): void {
+      const now = performance.now();
+      if (lastTap.cell === cell && now - lastTap.at < DOUBLE_TAP_MS) {
+        // The first tap of the pair toggled ×; take that back before the queen goes down.
+        const prev = lastTap.toggled ? history.pop() : undefined;
+        if (prev) marks = prev;
+        lastTap = { cell: -1, at: 0, toggled: false };
+        placeQueen(cell);
+        return;
+      }
       const current = marks[cell];
-      const next: Mark = current === "empty"
-        ? "cross"
-        : current === "cross"
-        ? "queen"
-        : "empty";
+      lastTap = { cell, at: now, toggled: current !== "queen" };
+      if (current === "queen") return;
       snapshot();
-      apply(cell, next);
+      apply(cell, current === "cross" ? "empty" : "cross");
     }
 
     function undo(): void {
       const prev = history.pop();
-      if (!prev || cleared) return;
+      if (!prev || cleared || over) return;
       marks = prev;
       setHeat(progress(puzzle, marks));
       fx?.sound("tick");
       void handle.update();
     }
 
-    function clearBoard(): void {
-      if (cleared) return;
+    /** Clears every ×. Queens stay: each one on the board is already known to be right. */
+    function clearCrosses(): void {
+      if (cleared || over) return;
       snapshot();
-      marks = marks.map(() => "empty");
-      setHeat(0);
+      marks = marks.map((m) => (m === "cross" ? "empty" : m));
       if (board) fx?.shake(board, 8);
+      void handle.update();
+    }
+
+    function retry(): void {
+      reset(stage);
       void handle.update();
     }
 
@@ -375,11 +431,16 @@ export const QueensGame = clientEntry(
       void handle.update();
     }
 
-    // --- pointer: tap to cycle, drag to paint crosses ------------------------
+    // --- pointer: tap, double-tap, long-press, drag ---------------------------
 
     let downCell = -1;
-    let painting = false;
+    /** What a drag paints: × from an empty cell, empty from a × cell, nothing from a queen. */
+    let paint: Mark | null = null;
     let dragged = false;
+    let pressTimer: ReturnType<typeof setTimeout> | undefined;
+    let pressFired = false;
+    /** The cell being held, for the charge-up ring. */
+    let pressing = -1;
 
     function cellAt(x: number, y: number): number {
       const el = document.elementFromPoint(x, y)?.closest<HTMLElement>(
@@ -388,33 +449,61 @@ export const QueensGame = clientEntry(
       return el ? Number(el.dataset.cell) : -1;
     }
 
+    function setPressing(cell: number): void {
+      if (pressing === cell) return;
+      pressing = cell;
+      void handle.update();
+    }
+
     function onDown(event: PointerEvent): void {
-      if (cleared || event.button > 0) return;
+      if (cleared || over || event.button > 0) return;
       const cell = cellAt(event.clientX, event.clientY);
       if (cell < 0) return;
       event.preventDefault();
       downCell = cell;
-      painting = marks[cell] === "empty";
       dragged = false;
+      pressFired = false;
+      paint = marks[cell] === "empty"
+        ? "cross"
+        : marks[cell] === "cross"
+        ? "empty"
+        : null;
+      clearTimeout(pressTimer);
+      if (marks[cell] !== "queen") {
+        setPressing(cell);
+        pressTimer = setTimeout(() => {
+          if (downCell !== cell || dragged) return;
+          pressFired = true;
+          lastTap = { cell: -1, at: 0, toggled: false };
+          setPressing(-1);
+          placeQueen(cell);
+        }, LONG_PRESS_MS);
+      }
     }
 
     function onMove(event: PointerEvent): void {
-      if (downCell < 0 || !painting) return;
+      if (downCell < 0 || pressFired) return;
       const cell = cellAt(event.clientX, event.clientY);
       if (cell < 0 || (cell === downCell && !dragged)) return;
+      clearTimeout(pressTimer);
+      setPressing(-1);
+      if (paint === null) return;
       if (!dragged) {
         dragged = true;
         snapshot();
-        apply(downCell, "cross");
+        apply(downCell, paint);
       }
-      if (marks[cell] === "empty") apply(cell, "cross");
+      if (marks[cell] !== "queen") apply(cell, paint);
     }
 
     function onUp(): void {
-      if (downCell >= 0 && !dragged) cycle(downCell);
+      clearTimeout(pressTimer);
+      if (downCell >= 0 && !dragged && !pressFired) tap(downCell);
       downCell = -1;
-      painting = false;
+      paint = null;
       dragged = false;
+      pressFired = false;
+      setPressing(-1);
     }
 
     handle.queueTask(() => {
@@ -443,7 +532,11 @@ export const QueensGame = clientEntry(
       const timer = setInterval(() => {
         if (!clock) return;
         clock.textContent = formatTime(
-          cleared ? finishedIn : startedAt ? performance.now() - startedAt : 0,
+          cleared || over
+            ? finishedIn
+            : startedAt
+            ? performance.now() - startedAt
+            : 0,
         );
       }, 250);
       handle.signal.addEventListener("abort", () => clearInterval(timer));
@@ -452,7 +545,6 @@ export const QueensGame = clientEntry(
 
     return () => {
       const { size, regions } = puzzle;
-      const bad = conflicts(puzzle, marks);
       const heat = progress(puzzle, marks);
       const queens = marks.filter((m) => m === "queen").length;
 
@@ -481,6 +573,20 @@ export const QueensGame = clientEntry(
                 ▶
               </button>
             </div>
+            <span
+              mix={livesStyle}
+              role="img"
+              aria-label={`残りハート ${lives}`}
+            >
+              {Array.from({ length: MAX_LIVES }, (_, i) => (
+                <span
+                  key={`${i}-${i < lives}`}
+                  mix={i < lives ? heartStyle : heartLostStyle}
+                >
+                  {i < lives ? "❤" : "🖤"}
+                </span>
+              ))}
+            </span>
             <span mix={clockStyle}>
               ⏱{" "}
               <span mix={ref((node) => (clock = node as HTMLElement))}>
@@ -507,12 +613,14 @@ export const QueensGame = clientEntry(
               ref((node) => (board = node as HTMLElement)),
               boardStyle,
               heat >= 0.75 ? hotStyle : null,
+              over ? deadStyle : null,
               on<HTMLDivElement, "pointerdown">("pointerdown", onDown),
               on<HTMLDivElement, "pointermove">("pointermove", onMove),
               on("contextmenu", (e) => e.preventDefault()),
             ]}
             style={{
               gridTemplateColumns: `repeat(${size}, 1fr)`,
+              "--n": String(size),
               "--board-heat": String(heat),
             }}
           >
@@ -535,7 +643,7 @@ export const QueensGame = clientEntry(
                       ? "×"
                       : "空"
                   }`}
-                  mix={[cellStyle, bad.has(i) ? badStyle : null]}
+                  mix={[cellStyle, pressing === i ? pressStyle : null]}
                   style={{
                     background: REGION_COLORS[region % REGION_COLORS.length],
                     borderTopWidth: edge(r > 0 ? regions[i - size] : undefined),
@@ -551,14 +659,27 @@ export const QueensGame = clientEntry(
                   {mark === "queen"
                     ? <span key="q" mix={queenStyle}>♛</span>
                     : mark === "cross"
-                    ? <span key="x" mix={crossStyle}>×</span>
+                    ? <span key="x" mix={crossStyle}>✕</span>
                     : null}
                 </button>
               );
             })}
           </div>
 
-          {cleared
+          {over
+            ? (
+              <div mix={clearStyle} role="status">
+                <p mix={overTitleStyle}>GAME OVER</p>
+                <p mix={clearTimeStyle}>STAGE {stage}</p>
+                <button
+                  type="button"
+                  mix={[bigButtonStyle, on("click", retry)]}
+                >
+                  ↻ もう一度
+                </button>
+              </div>
+            )
+            : cleared
             ? (
               <div mix={clearStyle} role="status">
                 <p mix={clearTitleStyle}>STAGE {stage} CLEAR!!</p>
@@ -582,10 +703,10 @@ export const QueensGame = clientEntry(
                 </button>
                 <button
                   type="button"
-                  mix={[toolStyle, on("click", clearBoard)]}
-                  disabled={!marks.some((m) => m !== "empty")}
+                  mix={[toolStyle, on("click", clearCrosses)]}
+                  disabled={!marks.includes("cross")}
                 >
-                  ⟲ リセット
+                  ✕ を消す
                 </button>
                 <button
                   type="button"
@@ -625,7 +746,9 @@ export const QueensGame = clientEntry(
               </div>
             )}
           <p mix={hintStyle}>
-            {queens}/{size} ♛ — タップで × → ♛ → 空、ドラッグで × を連続配置
+            {queens}/{size}{" "}
+            ♛ — タップで ✕、ダブルタップか長押しで ♛（外すと ❤
+            が減る）。ドラッグで ✕ をまとめて付け外し
           </p>
         </section>
       );
@@ -705,6 +828,8 @@ const boardStyle = css({
   display: "grid",
   width: "min(100%, 34rem)",
   aspectRatio: "1",
+  // The cells size their marks off the board's width: `100cqi / --n` is one cell.
+  containerType: "inline-size",
   border: "4px solid #1a1a2e",
   borderRadius: radius.md,
   overflow: "hidden",
@@ -740,15 +865,51 @@ const cellStyle = css({
   "&:hover": { filter: "brightness(1.12) saturate(1.2)" },
 });
 
-const badStyle = css({
-  backgroundImage:
-    "repeating-linear-gradient(45deg, #ff003366 0 6px, transparent 6px 12px) !important",
-  animation: "fx-wobble 0.3s ease-in-out 2",
+/** The held cell charges up until the long-press lands. */
+const pressStyle = css({
+  boxShadow: "inset 0 0 0 0 #ffffffcc",
+  animation: `fx-charge ${LONG_PRESS_MS}ms linear forwards`,
+});
+
+/** After a game over the board goes grey and stops taking input. */
+const deadStyle = css({
+  filter: "grayscale(0.85) brightness(0.7)",
+  pointerEvents: "none",
+  transition: "filter 900ms ease",
+});
+
+const livesStyle = css({
+  display: "flex",
+  gap: "0.15rem",
+  fontSize: "1.4rem",
+  lineHeight: 1,
+});
+
+const heartStyle = css({
+  display: "inline-block",
+  color: "#ff2d55",
+  textShadow: "0 0 8px #ff2d5588",
+  animation: "fx-throb 1.2s ease-in-out infinite",
+});
+
+const heartLostStyle = css({
+  display: "inline-block",
+  opacity: 0.6,
+  animation: "fx-pop 450ms cubic-bezier(.2,.8,.3,1.4)",
+});
+
+const overTitleStyle = css({
+  margin: 0,
+  fontSize: "clamp(2rem, 9vw, 3.4rem)",
+  fontWeight: 900,
+  color: "#ff2d55",
+  textShadow: "0 4px 0 #1a1a2e, 0 0 24px #ff003388",
+  letterSpacing: "0.06em",
 });
 
 const queenStyle = css({
   display: "inline-block",
-  fontSize: "clamp(1rem, 6vw, 2.2rem)",
+  fontSize: "calc(100cqi / var(--n) * 0.8)",
   lineHeight: 1,
   textShadow: "0 0 8px #fff, 0 2px 0 #fff8",
   animation: "fx-pop 420ms cubic-bezier(.2,.8,.3,1.4)",
@@ -756,10 +917,10 @@ const queenStyle = css({
 
 const crossStyle = css({
   display: "inline-block",
-  fontSize: "clamp(0.8rem, 4vw, 1.4rem)",
+  fontSize: "calc(100cqi / var(--n) * 0.62)",
   fontWeight: 900,
   lineHeight: 1,
-  opacity: 0.55,
+  opacity: 0.6,
   animation: "fx-pop 200ms ease-out",
 });
 

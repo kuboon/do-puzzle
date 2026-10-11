@@ -37,6 +37,8 @@ export interface Fx {
   setMuted(muted: boolean): void;
   /** The finale: fireworks, confetti, flashes. Resolves when the loudest part is over. */
   celebrate(element: HTMLElement, level?: number): Promise<void>;
+  /** The other finale: hit-stop, a blood-red flash, the board shattering. */
+  defeat(element: HTMLElement): Promise<void>;
   destroy(): void;
 }
 
@@ -60,7 +62,13 @@ export interface PopOptions {
   ms?: number;
 }
 
-export type SoundKind = "place" | "cross" | "error" | "clear" | "tick";
+export type SoundKind =
+  | "place"
+  | "cross"
+  | "error"
+  | "clear"
+  | "gameover"
+  | "tick";
 
 interface Particle {
   x: number;
@@ -341,6 +349,15 @@ export function createFx(): Fx {
         tone(160, 0, 0.25, "sawtooth", 0.12, 0.7);
         tone(150, 0.02, 0.25, "square", 0.08, 0.6);
         break;
+      case "gameover": {
+        // A falling minor line, then a low thud that will not resolve.
+        [12, 8, 5, 1].forEach((n, i) =>
+          tone(note(n - 12), i * 0.18, 0.35, "square", 0.1, 0.97)
+        );
+        tone(note(-24), 0.75, 1.6, "sawtooth", 0.14, 0.5);
+        tone(note(-23), 0.75, 1.6, "sawtooth", 0.1, 0.5);
+        break;
+      }
       case "clear": {
         const seq = [0, 4, 7, 12, 16, 19, 24];
         seq.forEach((n, i) => {
@@ -383,6 +400,37 @@ export function createFx(): Fx {
     nextFirework = now;
     await new Promise((r) => setTimeout(r, 450));
     flash("#ff4fd8", 0.5, 400);
+  }
+
+  async function defeat(element: HTMLElement) {
+    const rect = element.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    await new Promise((r) => setTimeout(r, 160));
+    flash("#7a0010", 0.9, 900);
+    sound("gameover");
+    shake(element, 34, 900);
+    shake(document.body, 14, 700);
+    ring(cx, cy, "#ff0033", Math.max(w, h));
+    // The board breaks: dark shards falling hard, sparks of red.
+    burst(cx, cy, {
+      count: 260,
+      shape: "confetti",
+      colors: ["#1a1a2e", "#3a3a4e", "#5a0010", "#000000"],
+      speed: 18,
+      gravity: 0.5,
+      life: 140,
+      size: 12,
+    });
+    burst(cx, cy, {
+      count: 160,
+      colors: ["#ff0033", "#ff5a00", "#ffffff"],
+      speed: 20,
+      life: 70,
+      size: 4,
+    });
+    await new Promise((r) => setTimeout(r, 500));
+    flash("#000000", 0.6, 700);
   }
 
   // --- frame loop ------------------------------------------------------------------------
@@ -585,6 +633,7 @@ export function createFx(): Fx {
       if (!muted) ensureAudio();
     },
     celebrate,
+    defeat,
     destroy() {
       cancelAnimationFrame(frame);
       globalThis.removeEventListener("resize", fit);
