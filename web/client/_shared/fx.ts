@@ -10,7 +10,8 @@
  *   rotates faster and faster, published as `--fx-hue` on `<html>` for any style to pick up.
  * - **Hits** (one per action): particle bursts, shockwave rings, screen shake, flashes, pop-up
  *   text and synthesized sound. A game passes the heat in, so the same move hits harder late.
- * - **Finale**: {@link Fx.celebrate} — hit-stop, white-out, fireworks and a confetti storm.
+ * - **Finale**: {@link Fx.celebrate} — hit-stop, white-out, confetti in full bloom, a
+ *   short volley of fireworks — then quiet again within a few seconds.
  *
  * `prefers-reduced-motion` tones it down rather than off: fewer particles, no shake, no flashes.
  *
@@ -173,7 +174,6 @@ export function createFx(): Fx {
     hue: (i * 360) / 7,
   }));
   let fireworksUntil = 0;
-  let confettiUntil = 0;
   let nextFirework = 0;
 
   const dark = () =>
@@ -394,12 +394,39 @@ export function createFx(): Fx {
       life: 120,
       size: 9,
     });
+    // Confetti in full bloom at once: thrown out hard, braked by drag, and gone in a couple of
+    // seconds — a storm that keeps falling would hide the cursor long after the moment has passed.
+    const pieces = Math.round(320 * level * amount);
+    for (let i = 0; i < pieces; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = 10 + Math.random() * 26;
+      const life = 70 + Math.random() * 50;
+      add({
+        x: cx,
+        y: cy,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s - 4,
+        life,
+        max: life,
+        size: 6 + Math.random() * 7,
+        color: RAINBOW[Math.floor(Math.random() * RAINBOW.length)],
+        shape: "confetti",
+        rot: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 0.5,
+        gravity: 0.12,
+        drag: 0.9,
+      });
+    }
+    // A short volley of fireworks right after, then quiet.
     const now = performance.now();
-    fireworksUntil = now + 4500;
-    confettiUntil = now + 6000;
-    nextFirework = now;
+    fireworksUntil = now + 1300;
+    nextFirework = now + 150;
     await new Promise((r) => setTimeout(r, 450));
     flash("#ff4fd8", 0.5, 400);
+    // Then settle: the stage is over, so the ambient storm winds down with it. The next
+    // `setHeat` from the game (a new stage) takes it from there.
+    await new Promise((r) => setTimeout(r, 900));
+    heat = 0;
   }
 
   async function defeat(element: HTMLElement) {
@@ -534,26 +561,6 @@ export function createFx(): Fx {
       });
       ring(x, y, c, 90);
       if (Math.random() < 0.5) sound("tick");
-    }
-    if (now < confettiUntil) {
-      const n = Math.round(6 * amount * dt);
-      for (let i = 0; i < n; i++) {
-        add({
-          x: Math.random() * w,
-          y: -10,
-          vx: (Math.random() - 0.5) * 3,
-          vy: 2 + Math.random() * 3,
-          life: 400,
-          max: 400,
-          size: 5 + Math.random() * 6,
-          color: RAINBOW[Math.floor(Math.random() * RAINBOW.length)],
-          shape: "confetti",
-          rot: Math.random() * Math.PI,
-          vr: (Math.random() - 0.5) * 0.3,
-          gravity: 0.03,
-          drag: 0.99,
-        });
-      }
     }
 
     for (let i = rings.length - 1; i >= 0; i--) {
