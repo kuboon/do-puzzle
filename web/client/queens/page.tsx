@@ -26,7 +26,7 @@ export interface QueensPageProps {
 export default function QueensPage(handle: Handle<QueensPageProps>) {
   return () => (
     <>
-      <h1 mix={titleStyle}>♛ ドパクイーン</h1>
+      <h1 mix={titleStyle}>ドパクイーン</h1>
       <QueensGame stage={1} />
       <article mix={[cardStyle, proseStyle]}>{handle.props.rules}</article>
     </>

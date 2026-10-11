@@ -47,6 +47,50 @@ export interface QueensProps {
   [key: string]: SerializableValue;
 }
 
+/** How thick a region line is, on each side of it. */
+const THICK = "3px";
+
+/**
+ * Square caps for this cell's corners, as a CSS background list.
+ *
+ * Each cell draws only its own edges, so where a thick line turns a corner the outside of the turn
+ * belongs to a cell whose two edges there are both thin — and it is left as a notch. That cell
+ * paints a THICK×THICK square in the corner to close it.
+ */
+function corners(
+  regions: readonly number[],
+  size: number,
+  r: number,
+  c: number,
+): string {
+  const at = (rr: number, cc: number) =>
+    rr < 0 || cc < 0 || rr >= size || cc >= size ? -1 : regions[rr * size + cc];
+  const differ = (a: number, b: number) => a !== -1 && b !== -1 && a !== b;
+  const self = at(r, c);
+  const caps: string[] = [];
+  for (
+    const [dr, dc, pos] of [
+      [-1, -1, "left top"],
+      [-1, 1, "right top"],
+      [1, -1, "left bottom"],
+      [1, 1, "right bottom"],
+    ] as const
+  ) {
+    const vertical = at(r, c + dc); // beside, across this cell's side edge
+    const horizontal = at(r + dr, c); // above/below, across this cell's top/bottom edge
+    const diagonal = at(r + dr, c + dc);
+    const ownThick = differ(self, vertical) || differ(self, horizontal);
+    const otherThick = differ(vertical, diagonal) ||
+      differ(horizontal, diagonal);
+    if (!ownThick && otherThick) {
+      caps.push(
+        `linear-gradient(#1a1a2e, #1a1a2e) ${pos} / ${THICK} ${THICK} no-repeat`,
+      );
+    }
+  }
+  return caps.length ? caps.join(", ") : "none";
+}
+
 /** One colour per region. Bright, and distinct from each other in both themes. */
 export const REGION_COLORS = [
   "#ffb26b",
@@ -629,7 +673,7 @@ export const QueensGame = clientEntry(
               const c = i % size;
               const region = regions[i];
               const edge = (other: number | undefined) =>
-                other === undefined || other !== region ? "3px" : "0.5px";
+                other === undefined || other !== region ? THICK : "0.5px";
               return (
                 <button
                   key={`${stage}-${i}`}
@@ -650,6 +694,7 @@ export const QueensGame = clientEntry(
                     "--bb": edge(r < size - 1 ? regions[i + size] : undefined),
                     "--bl": edge(c > 0 ? regions[i - 1] : undefined),
                     "--br": edge(c < size - 1 ? regions[i + 1] : undefined),
+                    "--corners": corners(regions, size, r, c),
                   }}
                 >
                   {mark === "queen"
@@ -861,6 +906,15 @@ const cellStyle = css({
     borderStyle: "solid",
     borderColor: "#1a1a2e",
     borderWidth: "var(--bt) var(--br) var(--bb) var(--bl)",
+    pointerEvents: "none",
+  },
+  // The corner caps from `corners()`: where a thick line turns at this cell's corner but neither
+  // of this cell's own edges there is thick, nothing else paints that little square.
+  "&::before": {
+    content: '""',
+    position: "absolute",
+    inset: 0,
+    background: "var(--corners, none)",
     pointerEvents: "none",
   },
   font: "inherit",
