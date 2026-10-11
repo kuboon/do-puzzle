@@ -592,7 +592,6 @@ export const QueensGame = clientEntry(
     return () => {
       const { size, regions } = puzzle;
       const heat = progress(puzzle, marks);
-      const queens = marks.filter((m) => m === "queen").length;
 
       return (
         <section mix={wrapStyle} aria-label="ドパクイーン">
@@ -789,9 +788,8 @@ export const QueensGame = clientEntry(
               </div>
             )}
           <p mix={hintStyle}>
-            {queens}/{size}{" "}
-            ♛ — タップで ✕、ダブルタップか長押しで ♛（外すと ❤
-            が減る）。ドラッグで ✕ をまとめて付け外し
+            タップで ✕、ダブルタップか長押しで ♛（外すと ❤ が減る）。ドラッグで
+            ✕ をまとめて付け外し
           </p>
         </section>
       );
