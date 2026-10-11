@@ -2,8 +2,8 @@
  * The document shell.
  *
  * A component like any other: a setup function that returns a render function, placed as
- * `<Layout title={…}>…</Layout>` by `server/router.tsx`. It writes `<head>`, a header with one link
- * per game, the page, and a footer.
+ * `<Layout title={…}>…</Layout>` by `server/router.tsx`. It writes `<head>`, a header with the
+ * site's name (a link home — the games are listed there), the page, and a footer.
  *
  * What turns this tree into a response is `context.render`, from the `render({ assets })`
  * middleware in `router.tsx` — `renderToStream`, which is what lets the runtime keep a plain
@@ -16,7 +16,6 @@
 import { css, type Handle, type RemixNode } from "@remix-run/component";
 
 import { base, BASE_META_NAME } from "./base.ts";
-import { games } from "./games.ts";
 import { routes } from "./routes.ts";
 import { color, contentWidth } from "./tokens.ts";
 
@@ -103,13 +102,6 @@ export function Layout(handle: Handle<LayoutProps>) {
         <body>
           <header mix={[bandStyle, headerStyle]}>
             <a mix={brandStyle} href={routes.home.href()}>{SITE_NAME}</a>
-            <nav mix={navStyle}>
-              {games.map((game) => (
-                <a key={game.id} href={game.href} mix={navLinkStyle}>
-                  {game.icon} {game.name}
-                </a>
-              ))}
-            </nav>
           </header>
           <main mix={[bandStyle, mainStyle]}>{props.children}</main>
           <footer mix={[bandStyle, footerStyle]}>
@@ -157,26 +149,6 @@ const brandStyle = css({
   backgroundClip: "text",
   WebkitBackgroundClip: "text",
   animation: "fx-slide 4s linear infinite",
-});
-
-const navStyle = css({
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "0.75rem",
-});
-
-const navLinkStyle = css({
-  fontWeight: 800,
-  textDecoration: "none",
-  color: color.fg,
-  padding: "0.2rem 0.7rem",
-  borderRadius: "999px",
-  border: `2px solid ${color.border}`,
-  transition: "transform 120ms ease",
-  "&:hover": {
-    transform: "scale(1.08) rotate(-2deg)",
-    borderColor: color.accent,
-  },
 });
 
 const mainStyle = css({ paddingBlock: "1rem 2.5rem" });

@@ -302,3 +302,28 @@ export function attacked(puzzle: Puzzle, cell: number): number[] {
   }
   return out;
 }
+
+/** Hearts a stage starts with. */
+export const MAX_LIVES = 3;
+
+/** What placing a queen does. */
+export type Verdict =
+  | { kind: "queen" }
+  | { kind: "miss"; lives: number }
+  | { kind: "over" };
+
+/**
+ * Judges a queen against the one solution.
+ *
+ * Right: the queen stays. Wrong: a heart is lost and the cell becomes ×. Wrong with no hearts
+ * left: game over.
+ */
+export function judgeQueen(
+  puzzle: Puzzle,
+  cell: number,
+  lives: number,
+): Verdict {
+  const row = Math.floor(cell / puzzle.size);
+  if (puzzle.solution[row] === cell % puzzle.size) return { kind: "queen" };
+  return lives > 0 ? { kind: "miss", lives: lives - 1 } : { kind: "over" };
+}

@@ -13,7 +13,9 @@
   色相・湧き上がる火の粉）は heat に応じて勝手に派手になる。
 - 1 手ごとの演出（パーティクル・衝撃波リング・画面揺れ・フラッシュ・ポップアップ
   文字・効果音）も heat を掛けて強くする。残り 1 手は最大級、クリアは
-  `Fx.celebrate()`（ヒットストップ → ホワイトアウト → 花火・紙吹雪）。
+  `Fx.celebrate()`（ヒットストップ → ホワイトアウト →
+  花火・紙吹雪）。ゲームオーバーは `Fx.defeat()`（ヒットストップ →
+  血の色のフラッシュ → 盤面が砕ける）。
 - heat は盤面から見て明らかに正しいものだけで計算する（答えを覗かない — heat
   から正誤がバレないように）。
 - **BGM も同じルール**: `web/client/_shared/music.ts`（`jsr:@kuboon/bgm` の上に
@@ -58,7 +60,10 @@ web/
 2. `web/server/<game>/` に `mod.tsx`（action）・`rules.md`・テスト
 3. `client/_shared/routes.ts` にルート、`client/_shared/games.ts` に一覧の行、
    `server/router.tsx` の controller に action
-4. 演出ルールに従い heat を `fx.setHeat()` に、`musicLevel()` を
+4. プレイ画面はズーム禁止: ページで `viewport = NO_ZOOM_VIEWPORT`、island で
+   `lockZoom(handle.signal)`（`client/_shared/no_zoom.ts`。ダブルタップ・ピンチの
+   ズームを止める）
+5. 演出ルールに従い heat を `fx.setHeat()` に、`musicLevel()` を
    `Music.setLevel()` に渡す （BGM は `client/<game>/song.ts`）
 
 ## ドパクイーン
@@ -69,8 +74,12 @@ N×N の盤面を N 色の領域に分け、各行・各列・各領域に 1 つ
 - 盤面はステージ番号を seed に `logic.ts` の `generate()` が決定的に生成する
   （同じステージは誰でも同じ問題）。解は必ず 1 通り（`solve()` で検証し、別解の
   クイーンのマスを隣の領域へ移して潰す）。
+- 操作: タップで ✕ のトグル、ダブルタップ / 長押しで ♛。♛ はその場で
+  `judgeQueen()` が解と照合し、外れなら ❤ を 1 つ失ってそのマスは ✕。❤ は 3
+  つで、0 のときに外すとゲームオーバー（`Fx.defeat()`、BGM は `Music.stop()`）。
+  盤上の ♛ は常に正しいので、heat は単純に ♛ の数 / N。
 - サイズはステージ 1–2 が 5×5、以降 6・7・8・9、25 以降 10×10。
-- 進捗（クリア済みステージ、現在のステージ、音・自動 × の設定）は
+- 進捗（クリア済みステージ、現在のステージ、音・自動 ✕ の設定）は
   `localStorage`。`?stage=N` でも開ける（クリア済み + 1 まで）。
 
 ## デプロイ

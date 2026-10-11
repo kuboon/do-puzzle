@@ -10,7 +10,8 @@
  *   rotates faster and faster, published as `--fx-hue` on `<html>` for any style to pick up.
  * - **Hits** (one per action): particle bursts, shockwave rings, screen shake, flashes, pop-up
  *   text and synthesized sound. A game passes the heat in, so the same move hits harder late.
- * - **Finale**: {@link Fx.celebrate} — hit-stop, white-out, fireworks and a confetti storm.
+ * - **Finale**: {@link Fx.celebrate} — hit-stop, white-out, confetti in full bloom, a
+ *   short volley of fireworks — then quiet again within a few seconds.
  *
  * `prefers-reduced-motion` tones it down rather than off: fewer particles, no shake, no flashes.
  *
@@ -37,6 +38,8 @@ export interface Fx {
   setMuted(muted: boolean): void;
   /** The finale: fireworks, confetti, flashes. Resolves when the loudest part is over. */
   celebrate(element: HTMLElement, level?: number): Promise<void>;
+  /** The other finale: hit-stop, a blood-red flash, the board shattering. */
+  defeat(element: HTMLElement): Promise<void>;
   destroy(): void;
 }
 
@@ -60,7 +63,13 @@ export interface PopOptions {
   ms?: number;
 }
 
-export type SoundKind = "place" | "cross" | "error" | "clear" | "tick";
+export type SoundKind =
+  | "place"
+  | "cross"
+  | "error"
+  | "clear"
+  | "gameover"
+  | "tick";
 
 interface Particle {
   x: number;
@@ -97,6 +106,18 @@ interface Blob {
 }
 
 const MAX_PARTICLES = 2500;
+
+/** The background canvas's resolution, in canvas pixels per CSS pixel. */
+const BACK_SCALE = 1 / 10;
+
+/** How often the background moves on: every Nth frame. */
+const AMBIENT_EVERY = 2;
+
+/**
+ * How often `--fx-hue` is written: every Nth frame. Each write restyles the whole page and
+ * repaints whatever glows with it, and ~15 updates a second still reads as a smooth colour cycle.
+ */
+const HUE_EVERY = 4;
 
 export const RAINBOW = [
   "#ff3b6b",
@@ -139,14 +160,22 @@ export function createFx(): Fx {
   let w = 1;
   let h = 1;
   let ratio = 1;
+  /** Whether the particle canvas has anything on it that the next frame must clear. */
+  let frontDirty = false;
+  let frameNo = 0;
+  let shownHue = "";
   const fit = () => {
-    ratio = Math.min(globalThis.devicePixelRatio || 1, 2);
+    // Particles want crisp edges, but past 1.5× the extra pixels cost far more than they show.
+    ratio = Math.min(globalThis.devicePixelRatio || 1, 1.5);
     w = globalThis.innerWidth;
     h = globalThis.innerHeight;
-    for (const c of [back, front]) {
-      c.width = Math.round(w * ratio);
-      c.height = Math.round(h * ratio);
-    }
+    front.width = Math.round(w * ratio);
+    front.height = Math.round(h * ratio);
+    // The background is nothing but soft blobs, so it is drawn at a tiny resolution and stretched
+    // — it looks the same, and fills ~1/100th of the pixels a full-resolution canvas would.
+    back.width = Math.max(1, Math.round(w * BACK_SCALE));
+    back.height = Math.max(1, Math.round(h * BACK_SCALE));
+    frontDirty = true;
   };
   fit();
   globalThis.addEventListener("resize", fit);
@@ -165,7 +194,6 @@ export function createFx(): Fx {
     hue: (i * 360) / 7,
   }));
   let fireworksUntil = 0;
-  let confettiUntil = 0;
   let nextFirework = 0;
 
   const dark = () =>
@@ -341,6 +369,15 @@ export function createFx(): Fx {
         tone(160, 0, 0.25, "sawtooth", 0.12, 0.7);
         tone(150, 0.02, 0.25, "square", 0.08, 0.6);
         break;
+      case "gameover": {
+        // A falling minor line, then a low thud that will not resolve.
+        [12, 8, 5, 1].forEach((n, i) =>
+          tone(note(n - 12), i * 0.18, 0.35, "square", 0.1, 0.97)
+        );
+        tone(note(-24), 0.75, 1.6, "sawtooth", 0.14, 0.5);
+        tone(note(-23), 0.75, 1.6, "sawtooth", 0.1, 0.5);
+        break;
+      }
       case "clear": {
         const seq = [0, 4, 7, 12, 16, 19, 24];
         seq.forEach((n, i) => {
@@ -377,12 +414,70 @@ export function createFx(): Fx {
       life: 120,
       size: 9,
     });
+    // Confetti in full bloom at once: thrown out hard, braked by drag, and gone in a couple of
+    // seconds — a storm that keeps falling would hide the cursor long after the moment has passed.
+    const pieces = Math.round(320 * level * amount);
+    for (let i = 0; i < pieces; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = 10 + Math.random() * 26;
+      const life = 70 + Math.random() * 50;
+      add({
+        x: cx,
+        y: cy,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s - 4,
+        life,
+        max: life,
+        size: 6 + Math.random() * 7,
+        color: RAINBOW[Math.floor(Math.random() * RAINBOW.length)],
+        shape: "confetti",
+        rot: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 0.5,
+        gravity: 0.12,
+        drag: 0.9,
+      });
+    }
+    // A short volley of fireworks right after, then quiet.
     const now = performance.now();
-    fireworksUntil = now + 4500;
-    confettiUntil = now + 6000;
-    nextFirework = now;
+    fireworksUntil = now + 1300;
+    nextFirework = now + 150;
     await new Promise((r) => setTimeout(r, 450));
     flash("#ff4fd8", 0.5, 400);
+    // Then settle: the stage is over, so the ambient storm winds down with it. The next
+    // `setHeat` from the game (a new stage) takes it from there.
+    await new Promise((r) => setTimeout(r, 900));
+    heat = 0;
+  }
+
+  async function defeat(element: HTMLElement) {
+    const rect = element.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    await new Promise((r) => setTimeout(r, 160));
+    flash("#7a0010", 0.9, 900);
+    sound("gameover");
+    shake(element, 34, 900);
+    shake(document.body, 14, 700);
+    ring(cx, cy, "#ff0033", Math.max(w, h));
+    // The board breaks: dark shards falling hard, sparks of red.
+    burst(cx, cy, {
+      count: 260,
+      shape: "confetti",
+      colors: ["#1a1a2e", "#3a3a4e", "#5a0010", "#000000"],
+      speed: 18,
+      gravity: 0.5,
+      life: 140,
+      size: 12,
+    });
+    burst(cx, cy, {
+      count: 160,
+      colors: ["#ff0033", "#ff5a00", "#ffffff"],
+      speed: 20,
+      life: 70,
+      size: 4,
+    });
+    await new Promise((r) => setTimeout(r, 500));
+    flash("#000000", 0.6, 700);
   }
 
   // --- frame loop ------------------------------------------------------------------------
@@ -395,19 +490,26 @@ export function createFx(): Fx {
     shownHeat += (heat - shownHeat) * 0.06 * dt;
     // The hue rotates faster as heat rises — lazy drift at 0, a strobe-y spin at 1.
     hue = (hue + (0.15 + shownHeat * shownHeat * 6) * dt) % 360;
-    document.documentElement.style.setProperty("--fx-hue", hue.toFixed(1));
-    document.documentElement.style.setProperty(
-      "--fx-heat",
-      shownHeat.toFixed(3),
-    );
+    frameNo++;
 
-    if (bctx) drawBack(bctx, dt, now);
+    // The ambient layer only moves slowly, so it runs at a fraction of the frame rate.
+    if (frameNo % HUE_EVERY === 0) {
+      const nextHue = String(Math.round(hue));
+      if (nextHue !== shownHue) {
+        shownHue = nextHue;
+        document.documentElement.style.setProperty("--fx-hue", nextHue);
+      }
+    }
+    if (frameNo % AMBIENT_EVERY === 0 && bctx) {
+      drawBack(bctx, dt * AMBIENT_EVERY, now);
+    }
+    spawnEmbers(dt);
     if (fctx) drawFront(fctx, dt, now);
     frame = requestAnimationFrame(tick);
   }
 
   function drawBack(ctx: CanvasRenderingContext2D, dt: number, now: number) {
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.setTransform(BACK_SCALE, 0, 0, BACK_SCALE, 0, 0);
     const d = dark();
     ctx.globalCompositeOperation = "source-over";
     ctx.fillStyle = d ? "#07070f" : "#fbf8ff";
@@ -440,6 +542,10 @@ export function createFx(): Fx {
       ctx.fillRect(0, 0, w, h);
     }
     ctx.globalCompositeOperation = "source-over";
+  }
+
+  function spawnEmbers(dt: number) {
+    const d = dark();
     // Embers: a trickle at rest, a geyser near the end.
     const rate = (0.15 + shownHeat * shownHeat * 6) * amount * dt;
     const embers = Math.min(
@@ -468,8 +574,15 @@ export function createFx(): Fx {
   }
 
   function drawFront(ctx: CanvasRenderingContext2D, dt: number, now: number) {
+    const busy = particles.length > 0 || rings.length > 0 ||
+      now < fireworksUntil;
+    // Nothing on screen and nothing coming: leave the canvas alone instead of clearing an empty
+    // screen sixty times a second.
+    if (!busy && !frontDirty) return;
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, w, h);
+    frontDirty = busy;
+    if (!busy) return;
 
     if (now < fireworksUntil && now >= nextFirework) {
       nextFirework = now + (reduced ? 600 : 160 + Math.random() * 220);
@@ -486,26 +599,6 @@ export function createFx(): Fx {
       });
       ring(x, y, c, 90);
       if (Math.random() < 0.5) sound("tick");
-    }
-    if (now < confettiUntil) {
-      const n = Math.round(6 * amount * dt);
-      for (let i = 0; i < n; i++) {
-        add({
-          x: Math.random() * w,
-          y: -10,
-          vx: (Math.random() - 0.5) * 3,
-          vy: 2 + Math.random() * 3,
-          life: 400,
-          max: 400,
-          size: 5 + Math.random() * 6,
-          color: RAINBOW[Math.floor(Math.random() * RAINBOW.length)],
-          shape: "confetti",
-          rot: Math.random() * Math.PI,
-          vr: (Math.random() - 0.5) * 0.3,
-          gravity: 0.03,
-          drag: 0.99,
-        });
-      }
     }
 
     for (let i = rings.length - 1; i >= 0; i--) {
@@ -585,6 +678,7 @@ export function createFx(): Fx {
       if (!muted) ensureAudio();
     },
     celebrate,
+    defeat,
     destroy() {
       cancelAnimationFrame(frame);
       globalThis.removeEventListener("resize", fit);

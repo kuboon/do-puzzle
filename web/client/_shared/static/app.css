@@ -148,7 +148,7 @@
 
 /*
  * Keyframes for the effects. `css(...)` mixins name these in `animation`; a mixin cannot declare
- * keyframes itself, so they live here. `--fx-hue` and `--fx-heat` are set on <html> every frame by
+ * keyframes itself, so they live here. `--fx-hue` is set on <html> about 15 times a second by
  * `client/_shared/fx.ts`.
  */
 
@@ -238,5 +238,15 @@
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+/* A long-press charging up: a light ring closing in from the cell's edge. */
+@keyframes fx-charge {
+  from {
+    box-shadow: inset 0 0 0 0 #ffffffcc;
+  }
+  to {
+    box-shadow: inset 0 0 0 999px #ffffff66;
   }
 }

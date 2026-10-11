@@ -5,7 +5,9 @@ import {
   conflicts,
   generate,
   isSolved,
+  judgeQueen,
   type Mark,
+  MAX_LIVES,
   progress,
   puzzleForStage,
   sizeForStage,
@@ -90,4 +92,17 @@ Deno.test("attacked covers row, column, region and neighbours", () => {
     assert(!hit.has(other), "the solution's other queens stay free");
   }
   assert(hit.has(cell + p.size)); // straight below
+});
+
+Deno.test("a queen off the solution costs a heart, and with none left ends the game", () => {
+  const p = puzzleForStage(4);
+  const right = p.solution[0];
+  const wrong = (p.solution[0] + 1) % p.size;
+  assertEquals(judgeQueen(p, right, 0), { kind: "queen" });
+  assertEquals(judgeQueen(p, wrong, MAX_LIVES), {
+    kind: "miss",
+    lives: MAX_LIVES - 1,
+  });
+  assertEquals(judgeQueen(p, wrong, 1), { kind: "miss", lives: 0 });
+  assertEquals(judgeQueen(p, wrong, 0), { kind: "over" });
 });
