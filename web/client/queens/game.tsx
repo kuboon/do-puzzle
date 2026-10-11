@@ -717,7 +717,7 @@ export const QueensGame = clientEntry(
                     on("click", toggleAuto),
                   ]}
                 >
-                  自動 ×
+                  自動 ✕
                 </button>
                 <button
                   type="button"
