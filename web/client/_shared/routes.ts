@@ -16,4 +16,5 @@ import { base } from "./base.ts";
 export const routes = route(base, {
   home: get("/"),
   queens: get("/queens"),
+  sudoku: get("/sudoku"),
 });

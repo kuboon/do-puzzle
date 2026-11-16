@@ -32,6 +32,14 @@ export interface Fx {
   flash(color: string, alpha?: number, ms?: number): void;
   /** Big text that pops at a page point and floats away. */
   popText(x: number, y: number, text: string, options?: PopOptions): void;
+  /**
+   * A wave of bursts running along a line of points, one after the other with a rising note each
+   * — for "this whole line is done": a filled row, a finished set. Louder with heat.
+   */
+  chain(
+    points: readonly { x: number; y: number }[],
+    options?: ChainOptions,
+  ): void;
   /** A short synthesized sound. */
   sound(kind: SoundKind, heat?: number, step?: number): void;
   /** Turns sound on or off. Sound starts off until the first user gesture turns it on. */
@@ -53,6 +61,16 @@ export interface BurstOptions {
   /** Frames to live. */
   life?: number;
   size?: number;
+}
+
+export interface ChainOptions {
+  colors?: readonly string[];
+  /** Delay between points. */
+  stepMs?: number;
+  /** `0 … 1`; defaults to the current heat. */
+  heat?: number;
+  /** The first note of the rising run, as a step on the place scale. */
+  startStep?: number;
 }
 
 export interface PopOptions {
@@ -392,6 +410,31 @@ export function createFx(): Fx {
     }
   }
 
+  function chain(
+    points: readonly { x: number; y: number }[],
+    o: ChainOptions = {},
+  ) {
+    const chainHeat = o.heat ?? heat;
+    const colors = o.colors ?? RAINBOW;
+    const stepMs = o.stepMs ?? 45;
+    points.forEach((p, i) => {
+      setTimeout(() => {
+        const c = colors[i % colors.length];
+        burst(p.x, p.y, {
+          count: 14 + 30 * chainHeat,
+          colors: [c, "#ffffff"],
+          speed: 4 + 6 * chainHeat,
+          life: 40 + 20 * chainHeat,
+          size: 3 + 2 * chainHeat,
+        });
+        ring(p.x, p.y, c, 40 + 60 * chainHeat);
+        if (i % 2 === 0) {
+          sound("place", chainHeat, (o.startStep ?? 0) + Math.floor(i / 2));
+        }
+      }, i * stepMs);
+    });
+  }
+
   // --- finale ------------------------------------------------------------------------------
 
   async function celebrate(element: HTMLElement, level = 1) {
@@ -672,6 +715,7 @@ export function createFx(): Fx {
     shake,
     flash,
     popText,
+    chain,
     sound,
     setMuted(next) {
       muted = next;

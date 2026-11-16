@@ -25,6 +25,7 @@ import { routes } from "../client/_shared/routes.ts";
 import * as Home from "../client/_shared/home.tsx";
 
 import { queensAction } from "./queens/mod.tsx";
+import { sudokuAction } from "./sudoku/mod.tsx";
 
 /** Deploy path prefix. The build strips it back off when writing, so output lands at the root. */
 export { base };
@@ -67,6 +68,7 @@ const pages = createController(routes, {
         </Layout>,
       ),
     queens: queensAction,
+    sudoku: sudokuAction,
   },
 });
 

@@ -9,6 +9,7 @@ Deno.test("GET / lists the games and ships no script", async () => {
   assertStringIncludes(html, "<!DOCTYPE html>");
   assertStringIncludes(html, "ドパズル");
   assertStringIncludes(html, 'href="/queens"');
+  assertStringIncludes(html, 'href="/sudoku"');
   assert(!html.includes('<script type="module"'));
 });
 
@@ -31,6 +32,24 @@ Deno.test("GET /queens renders the board, the rules and the runtime", async () =
 
 Deno.test("GET /og/queens.png is a PNG", async () => {
   const res = await router.fetch(new Request("http://x/og/queens.png"));
+  assertEquals(res.status, 200);
+  assertEquals(res.headers.get("content-type"), "image/png");
+  await res.body?.cancel();
+});
+
+Deno.test("GET /sudoku renders the grid, the rules and the runtime", async () => {
+  const res = await router.fetch(new Request("http://x/sudoku"));
+  assertEquals(res.status, 200);
+  const html = await res.text();
+  assertStringIncludes(html, "/assets/sudoku/game");
+  // Stage 1 is 4×4: 16 cells rendered on the server.
+  assertEquals(html.match(/data-cell="/g)?.length, 16);
+  assertStringIncludes(html, "数独のルール");
+  assertStringIncludes(html, "user-scalable=no");
+});
+
+Deno.test("GET /og/sudoku.png is a PNG", async () => {
+  const res = await router.fetch(new Request("http://x/og/sudoku.png"));
   assertEquals(res.status, 200);
   assertEquals(res.headers.get("content-type"), "image/png");
   await res.body?.cancel();
