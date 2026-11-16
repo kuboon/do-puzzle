@@ -25,4 +25,11 @@ export const games: readonly GameEntry[] = [
     icon: "♛",
     href: routes.queens.href(),
   },
+  {
+    id: "sudoku",
+    name: "ドパ数独",
+    tagline: "各行・各列・各ブロックに数字を 1 つずつ。埋めるほど爆発する。",
+    icon: "9",
+    href: routes.sudoku.href(),
+  },
 ];

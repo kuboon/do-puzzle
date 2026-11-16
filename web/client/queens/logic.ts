@@ -10,6 +10,8 @@
  * server that renders the page and in the browser that plays it.
  */
 
+import { rng, shuffle } from "../_shared/rng.ts";
+
 /** One puzzle. Cells are numbered row-major: `row * size + col`. */
 export interface Puzzle {
   size: number;
@@ -22,17 +24,7 @@ export interface Puzzle {
 /** What the player has put on a cell. */
 export type Mark = "empty" | "cross" | "queen";
 
-/** A small seeded PRNG (mulberry32): the same seed always gives the same board. */
-export function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export { rng } from "../_shared/rng.ts";
 
 /** The board size for a stage: small boards first, bigger ones as the stages go on. */
 export function sizeForStage(stage: number): number {
@@ -101,14 +93,6 @@ export function generate(size: number, seed: number): Puzzle {
     }
     if (attempt > 500) throw new Error(`could not generate a ${size} board`);
   }
-}
-
-function shuffle<T>(items: T[], random: () => number): T[] {
-  for (let i = items.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [items[i], items[j]] = [items[j], items[i]];
-  }
-  return items;
 }
 
 function placeQueens(size: number, random: () => number): number[] {

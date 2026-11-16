@@ -40,11 +40,13 @@ web/
   client/
     _shared/   layout・routes・games 一覧・トップページ・fx（演出エンジン）・music（BGM）・static/
     queens/    page.tsx（ページ）・game.tsx（island）・logic.ts（ルールと生成器）・song.ts（BGM）
+    sudoku/    同上
   server/
     router.tsx 唯一のエントリ
     _shared/   assets（bundle）・runtime・og 画像・markdown
     queens/    mod.tsx（ページの action）・rules.md（説明）・logic_test.ts・song_test.ts
-  tests/       ブラウザ smoke（lightpanda）
+    sudoku/    同上
+  tests/       ブラウザ smoke（lightpanda）。共通処理は lightpanda.ts
 ```
 
 - **どのゲームも説明の Markdown を 1 つ持つ**: `web/server/<game>/rules.md`。
@@ -81,6 +83,27 @@ N×N の盤面を N 色の領域に分け、各行・各列・各領域に 1 つ
 - サイズはステージ 1–2 が 5×5、以降 6・7・8・9、25 以降 10×10。
 - 進捗（クリア済みステージ、現在のステージ、音・自動 ✕ の設定）は
   `localStorage`。`?stage=N` でも開ける（クリア済み + 1 まで）。
+
+## ドパ数独
+
+N×N をブロックに分け、各行・各列・各ブロックに 1〜N を 1 つずつ書く。
+
+- 盤面はステージ番号を seed に `logic.ts` の `puzzleForStage()`
+  が決定的に生成する。
+  乱数で完成盤面を作り、点対称のペアでヒントを抜いていく（抜いて解が 2 通りに
+  なるなら戻す）ので解は必ず 1 通り。乱数は
+  `client/_shared/rng.ts`（全ゲーム共通）。
+- サイズはステージ 1 が 4×4、2–3 が 6×6（2×3 ブロック）、4 以降 9×9。9×9
+  はヒント 40 から 1 ステージごとに減り、26 で止まる。
+- 操作: マスを選んで数字パッド（またはキーボード）で書く。書いた数字はその場で
+  `judge()` が解と照合し、外れなら ❤ を 1 つ失って数字は残らない。❤ は 3 つ。
+  盤上の数字は常に正しいので、heat は埋めた空マス /
+  空マスの数。メモ（候補）モード、
+  「候補を全部」（盤面から見える候補を全部メモ）あり。
+- 行・列・ブロックを埋め切ると `Fx.chain()`
+  がその列に沿って虹色の連鎖を走らせる。
+- 進捗は `localStorage`（`sudoku:*`）。`?stage=N` でも開ける（クリア済み + 1
+  まで）。
 
 ## デプロイ
 
